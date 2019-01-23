@@ -7,7 +7,7 @@ package cn.zznlin.fornowSocket.socket;
  */
 public class DoMain {
     public static void main(String[] args) {
-        WebSocketServerImpl socket = new WebSocketServerImpl("localhost", 9999);
+        WebSocketServerImpl socket = new WebSocketServerImpl("127.0.0.1", 9999);
         socket.start();
     }
 }

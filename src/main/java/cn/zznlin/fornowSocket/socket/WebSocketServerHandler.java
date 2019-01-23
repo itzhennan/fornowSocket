@@ -9,6 +9,8 @@ import io.netty.handler.codec.http.websocketx.WebSocketFrame;
  * @Author zhennan
  * @Date 2019/1/22 23:54
  * @Description
+ *
+ *      自定义 channelHandler 处理器
  */
 public class WebSocketServerHandler extends SimpleChannelInboundHandler<Object> {
     private WebSocketService webSocketServiceImpl;

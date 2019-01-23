@@ -28,7 +28,7 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
 
     private static final AttributeKey<WebSocketServerHandshaker> ATTR_HANDSHAKER = AttributeKey.newInstance("ATTR_KEY_CHANNELID");
 
-    private static final int MAX_CONTENT_LENGTH = 65536;
+    private static final int MAX_CONTENT_LENGTH = 64 * 1024;
 
     private static final String WEBSOCKET_UPGRADE = "websocket";
 
@@ -58,7 +58,6 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
 
     //启动
     public void start(){
-
         EventLoopGroup bossGroup = new NioEventLoopGroup();
         EventLoopGroup workerGroup = new NioEventLoopGroup();
         ServerBootstrap sb = new ServerBootstrap();
@@ -69,6 +68,7 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
             @Override
             protected void initChannel(final Channel ch) throws Exception {
                 // TODO Auto-generated method stub
+                System.out.println("【"+ch.id()+"】-------->已连接");
                 ChannelPipeline pl = ch.pipeline();
                 //保存引用
                 channelMap.put(ch.id(), ch);
@@ -78,21 +78,21 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
                     @Override
                     public void operationComplete(ChannelFuture future) throws Exception {
                         // TODO Auto-generated method stub
+                        System.out.println("【"+ch.id()+"】-------->已关闭");
                         //关闭后抛弃
                         channelMap.remove(future.channel().id());
                         group.remove(ch);
                     }
                 });
-
+                // 编解码器
                 pl.addLast(HN_HTTP_CODEC,new HttpServerCodec());
+                // HTTP解析
                 pl.addLast(NH_HTTP_AGGREGATOR,new HttpObjectAggregator(MAX_CONTENT_LENGTH));
+                // 处理大数据流
                 pl.addLast(NH_HTTP_CHUNK,new ChunkedWriteHandler());
+                // 自定义逻辑
                 pl.addLast(NH_SERVER,new WebSocketServerHandler(WebSocketServerImpl.this,WebSocketServerImpl.this));
-
-
             }
-
-
 
         });
 
@@ -104,7 +104,6 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
                 public void operationComplete(ChannelFuture future) throws Exception {
                     // TODO Auto-generated method stub
                     if(future.isSuccess()){
-
                         System.out.println("websocket started");
                     }
                 }
@@ -169,18 +168,16 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
             String text = ((TextWebSocketFrame) frame).text();
 
             TextWebSocketFrame rsp = new TextWebSocketFrame(text);
-//            System.out.println(channelMap.size());
-//
-//            for(Channel ch:channelMap.values()){
-//
-//
-//                if (ctx.channel().equals(ch)) {
-//                    continue;
-//                }
-//                ch.writeAndFlush(rsp);
-//            }
-            group.writeAndFlush(rsp);
+            System.out.println("channelMapSize ----->"+channelMap.size());
+            System.out.println("【"+ctx.channel().id()+"】msg----->"+text);
 
+            for(Channel ch:channelMap.values()){
+                if (ctx.channel().equals(ch)) {
+                    continue;
+                }
+                ch.writeAndFlush(rsp);
+            }
+//            group.writeAndFlush(rsp);
 
 //
         }
