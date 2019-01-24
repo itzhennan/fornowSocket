@@ -27,6 +27,7 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
     private static final String NH_SERVER = "NH_LOGIC";
 
     private static final AttributeKey<WebSocketServerHandshaker> ATTR_HANDSHAKER = AttributeKey.newInstance("ATTR_KEY_CHANNELID");
+    private static final AttributeKey<String> ATTR_CHANNEL_NAME = AttributeKey.newInstance("CHANNEL_NAME");
 
     private static final int MAX_CONTENT_LENGTH = 64 * 1024;
 
@@ -42,10 +43,13 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
     //端口号
     private int port;
 
+    // 业务与websocket的映射MAP
+    private Map<String, ChannelId> channelMapping = new ConcurrentHashMap<String, ChannelId>();
+
     //存放websocket连接
     private Map<ChannelId, Channel> channelMap = new ConcurrentHashMap<ChannelId, Channel>();
-    private ChannelGroup group = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
 
+    private ChannelGroup group = new DefaultChannelGroup(GlobalEventExecutor.INSTANCE);
 
     private final String WEBSOCKET_URI_ROOT;
 
@@ -68,9 +72,10 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
             @Override
             protected void initChannel(final Channel ch) throws Exception {
                 // TODO Auto-generated method stub
-                System.out.println("【"+ch.id()+"】-------->已连接");
+                System.out.println("【"+ch.id()+"】【"+ch.attr(ATTR_CHANNEL_NAME).get()+"】-------->已连接");
                 ChannelPipeline pl = ch.pipeline();
                 //保存引用
+//                channelMapping.put(ch.attr(ATTR_CHANNEL_NAME).get(),ch.id());
                 channelMap.put(ch.id(), ch);
                 group.add(ch);
                 ch.closeFuture().addListener(new ChannelFutureListener() {
@@ -78,8 +83,11 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
                     @Override
                     public void operationComplete(ChannelFuture future) throws Exception {
                         // TODO Auto-generated method stub
+
+//                        System.out.println("【"+ch.id()+"】【"+ch.attr(ATTR_CHANNEL_NAME).get()+"】-------->已关闭");
                         System.out.println("【"+ch.id()+"】-------->已关闭");
                         //关闭后抛弃
+//                        channelMapping.remove(ch.attr(ATTR_CHANNEL_NAME).get());
                         channelMap.remove(future.channel().id());
                         group.remove(ch);
                     }
@@ -134,7 +142,6 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
                                   FullHttpRequest request) {
         // TODO Auto-generated method stub
 
-
         if(isWebSocketUpgrade(request)){
 
             String subProtocols = request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
@@ -148,14 +155,17 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
                 WebSocketServerHandshakerFactory.sendUnsupportedVersionResponse(ctx.channel());
 
             }else{
+                String channelName = getChannelName(request);
+
                 //响应请求
                 handshaker.handshake(ctx.channel(), request);
                 //将handshaker绑定给channel
+                System.out.println(ctx.channel().id());
                 ctx.channel().attr(ATTR_HANDSHAKER).set(handshaker);
+                ctx.channel().attr(ATTR_CHANNEL_NAME).set(channelName);
             }
             return;
         }
-
 
     }
 
@@ -171,13 +181,13 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
             System.out.println("channelMapSize ----->"+channelMap.size());
             System.out.println("【"+ctx.channel().id()+"】msg----->"+text);
 
-            for(Channel ch:channelMap.values()){
-                if (ctx.channel().equals(ch)) {
-                    continue;
-                }
-                ch.writeAndFlush(rsp);
-            }
-//            group.writeAndFlush(rsp);
+//            for(Channel ch:channelMap.values()){
+//                if (ctx.channel().equals(ch)) {
+//                    continue;
+//                }
+//                ch.writeAndFlush(rsp);
+//            }
+            group.writeAndFlush(rsp);
 
 //
         }
@@ -216,8 +226,29 @@ public class WebSocketServerImpl implements WebSocketService, HttpService{
 
         return request.method().equals(HttpMethod.GET)
                 && headers.get(HttpHeaderNames.UPGRADE).contains(WEBSOCKET_UPGRADE)
-                && headers.get(HttpHeaderNames.CONNECTION).contains(WEBSOCKET_CONNECTION);
+                && headers.get(HttpHeaderNames.CONNECTION).contains(WEBSOCKET_CONNECTION)
+                && checkAuthorization(headers);
+    }
 
+    /**
+     * 验证请求是否合法
+     * @param headers
+     * @return
+     */
+    private boolean checkAuthorization(HttpHeaders headers){
+        String authorization = headers.get(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
+        System.out.println("authorization----->" + authorization);
+        return true;
+    }
+
+    /**
+     * 获得业务ChannelName
+     * @param request
+     * @return
+     */
+    private String getChannelName(FullHttpRequest request) {
+        String authorization = request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
+        return authorization;
     }
 
     public void sendMessage(String message){
